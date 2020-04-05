@@ -1,11 +1,12 @@
 %% Implementation of example 1 in "Help on SOS", Andrew Pacakrd et al. 2010.
-clear all;
+% clear all;
 pvar x1 x2;
 pvar beta gamma;
 vars = [x1; x2];
 % vector of monomials
 vars_mono1to6 = monomials(vars, 1:6);
 vars_mono01234 = monomials(vars, [0, 1, 2, 3, 4]);
+vars_mono123 = monomials(vars, [1, 2, 3]);
 vars_mono0123 = monomials(vars, [0, 1, 2, 3]);
 vars_mono012 = monomials(vars, [0, 1, 2]);
 vars_mono12 = monomials(vars, [1, 2]);
@@ -24,75 +25,139 @@ x = vars;
 A = [0, -1;
     1, -1]; % Linearization of f on x=[0,0]
 Q = eye(2);
+% Q = [5 0; 0 2];
 P = lyap(A', Q); % We have to transpose A, that's what the function takes.
 V = x' * P * x; % Lyapunov Function
 dV = diff(V,x1)*f(1)+diff(V,x2)*f(2); % lie derivative of V
 l = eps * x' * x;
 disp("Searching for the maximum level of the given quadratic lyapunov function with P");
 disp(P);
-
-% Bisective search on gamma.
-gamma_high = 10;
-gamma_low = 0;
-gamma_var = (gamma_high - gamma_low) / 2 + gamma_low;
-while_count = 0;
-feasiblity = false;
-while gamma_high - gamma_low > eps || ~feasibility
-    d_gamma = gamma_high - gamma_low;
-    disp(gamma_var);
-    % Initialization.
-    prog = sosprogram(vars);
-    % Decision var: s(x)
-    [prog, s] = sossosvar(prog, vars_mono01, 'wscoeff');
-    % S-procedure
-    t = -(l + dV) + s * (V - gamma_var);
-    prog = sosineq(prog, t);
-    prog = sossolve(prog,solver_opt);
-
-    if prog.solinfo.info.pinf || prog.solinfo.info.dinf
-        % Infeasible
-        disp("Infeasible");
-        gamma_high = gamma_var;
-        feasibility = false;
-    else
-        % Feasible
-        disp("Feasible");
-        gamma_low = gamma_var;
-        feasibility = true;
-    end
-    gamma_var = (gamma_high - gamma_low) / 2 + gamma_low;
-    if while_count > 100
-        disp("Infeasible in the first problem.");
-        return
-    end
-    while_count = while_count +1;
-end     
-
-fprintf("SDP solution: max level of V (gamma) %f \n", gamma_var);
+% 
+% % Bisective search on gamma.
+% gamma_high = 10;
+% gamma_low = 0;
+% gamma_var = (gamma_high - gamma_low) / 2 + gamma_low;
+% while_count = 0;
+% feasiblity = false;
+% while gamma_high - gamma_low > eps || ~feasibility
+%     d_gamma = gamma_high - gamma_low;
+%     disp(gamma_var);
+%     % Initialization.
+%     prog = sosprogram(vars);
+%     % Decision var: s(x)
+%     [prog, s] = sossosvar(prog, vars_mono01, 'wscoeff');
+%     % S-procedure
+%     t = -(l + dV) + s * (V - gamma_var);
+%     prog = sosineq(prog, t);
+%     prog = sossolve(prog,solver_opt);
+% 
+%     if prog.solinfo.info.pinf || prog.solinfo.info.dinf
+%         % Infeasible
+%         disp("Infeasible");
+%         gamma_high = gamma_var;
+%         feasibility = false;
+%     else
+%         % Feasible
+%         disp("Feasible");
+%         gamma_low = gamma_var;
+%         feasibility = true;
+%     end
+%     gamma_var = (gamma_high - gamma_low) / 2 + gamma_low;
+%     if while_count > 100
+%         disp("Infeasible in the first problem.");
+%         return
+%     end
+%     while_count = while_count +1;
+% end     
+% 
+% fprintf("SDP solution: max level of V (gamma) %f \n", gamma_var);
 
 %% Problem 2: Solving for the Lyapunov Function.
-h = x' * x;
+h = x' * P * x;
 l1 = eps * x' * x;
 l2 = eps * x' * x;
 
+
+trace_phase1_gamma = [];
+trace_phase1_beta = [];
+trace_phase2_gamma = [];
+trace_phase2_beta = [];
 
 %% Sete Iterative decision variables.
 % Use the feasible solution from the previous problem. Normalize the
 % Lyapunov Function.
 % V_sol = V;
 normalized_gamma = 10;
-V_sol = normalized_gamma * V / (gamma_var - 1e-4); % 1e-4 to prevent numerical error
+% V_sol = normalized_gamma * V / (gamma_var - 1e-4); % 1e-4 to prevent numerical error
 N_iteration = 100;
+trace_phase2_V_coeff = cell(100, 1);
+
 prev_beta_sol = 0;
 for k = 1:N_iteration
     %% Iterative phase 1 - solving for s1, s2
+    
+    if k > 1
+    %% Maximize gamma
+    % bisective search on gamma
+    gamma_low = normalized_gamma;
+    gamma_high = gamma_low + 100;
+    gamma_var = (gamma_high - gamma_low) / 2 + beta_low;
+    feasibility = false;
+    dV_sol = diff(V_sol,x1)*f(1)+diff(V_sol,x2)*f(2); % lie derivative of V    
+    while_count = 0;  
+    while gamma_high - gamma_low > eps || ~feasibility
+        d_gamma = gamma_high - gamma_low;
+        disp("----------");
+        disp("check gamma: ");
+        disp(gamma_var);
+        progG = sosprogram(vars); % Initialization.
+        % Decision var: s1(x)
+        [progG, s1] = sossosvar(progG, vars_mono012, 'wscoeff');
+        % Decision var: s2(x)
+        [progG, s2] = sossosvar(progG, vars_mono01, 'wscoeff');
+
+        t1 = -((prev_beta_sol - h) * s1 + (V_sol - gamma_var)); % (21)
+        t2 = -(l2 + dV_sol) + s2 * (V_sol - gamma_var); % (22)
+
+        progG = sosineq(progG, t1);
+        progG = sosineq(progG, t2);
+        progG = sossolve(progG,solver_opt);
+
+        if progG.solinfo.info.pinf || progG.solinfo.info.dinf
+            % Infeasible
+            disp("Infeasible");
+            gamma_high = gamma_var;
+            feasibility = false;
+        else
+            % Feasible
+            disp("Feasible");
+            gamma_low = gamma_var;
+            feasibility = true;
+        end
+        gamma_var = (gamma_high - gamma_low) / 2 + gamma_low;
+        if while_count > 100
+            disp("Infeasible in phase 1 - gamma");
+            return
+        end
+        while_count = while_count +1;
+    end
+    gamma_sol = gamma_var;
+%     s1_sol = sosgetsol(progS,s1);
+%     s2_sol = sosgetsol(progS,s2);    
+    else
+        gamma_sol = normalized_gamma;
+    end
+    
+    trace_phase1_gamma = [trace_phase1_gamma; gamma_sol];
+    
+    %% Maximize beta
     % Bisective search on beta.
     beta_low = prev_beta_sol;
     beta_high = beta_low + 10;
     beta_var = (beta_high - beta_low) / 2 + beta_low;
     feasibility = false;
     dV_sol = diff(V_sol,x1)*f(1)+diff(V_sol,x2)*f(2); % lie derivative of V    
-    while_count = 0;
+    while_count = 0;    
     while beta_high - beta_low > eps || ~feasibility
         d_beta = beta_high - beta_low;
         disp("----------");
@@ -104,11 +169,11 @@ for k = 1:N_iteration
         % Decision var: s2(x)
         [progS, s2] = sossosvar(progS, vars_mono01, 'wscoeff');
 
-        t1 = -((beta_var - h) * s1 + (V_sol - normalized_gamma)); % (21)
-%         t1 = -((beta_var - h) * s1 + (V_sol - gamma_var)); % (21)
+%         t1 = -((beta_var - h) * s1 + (V_sol - normalized_gamma)); % (21)
+        t1 = -((beta_var - h) * s1 + (V_sol - gamma_var)); % (21)
 
-        t2 = -(l2 + dV_sol) + s2 * (V_sol - normalized_gamma); % (22)
-%         t2 = -(l2 + dV_sol) + s2 * (V_sol - gamma_var); % (22)
+%         t2 = -(l2 + dV_sol) + s2 * (V_sol - normalized_gamma); % (22)
+        t2 = -(l2 + dV_sol) + s2 * (V_sol - gamma_var); % (22)
 
         progS = sosineq(progS, t1);
         progS = sosineq(progS, t2);
@@ -128,7 +193,7 @@ for k = 1:N_iteration
         end
         beta_var = (beta_high - beta_low) / 2 + beta_low;
         if while_count > 100
-            disp("Infeasible in phase 1.");
+            disp("Infeasible in phase 1 - beta");
             return
         end
         while_count = while_count +1;
@@ -138,10 +203,14 @@ for k = 1:N_iteration
     s1_sol = sosgetsol(progS,s1);
     s2_sol = sosgetsol(progS,s2);
 
+    trace_phase1_beta = [trace_phase1_beta; beta_var];
+
+    
     %% Iterative phase 2 - solving for V
     progV = sosprogram(vars); % Initialization.
     % Decision variable: V
-    [progV, V] = sospolyvar(progV, vars_mono1to6, 'wscoeff');
+    [progV, V] = sossosvar(progV, vars_mono123, 'wscoeff');
+%     [progV, V] = sospolyvar(progV, vars_mono1to6, 'wscoeff');
     dV = diff(V,x1)*f(1)+diff(V,x2)*f(2); % lie derivative of V    
     % Decision variable: beta
     progV = sosdecvar(progV,beta);
@@ -163,8 +232,16 @@ for k = 1:N_iteration
     end
     V_sol = sosgetsol(progV,V);
     beta_sol = double(sosgetsol(progV, beta)) - 1e-4
-    gamma_sol = double(sosgetsol(progV, gamma))
-    V_sol = normalized_gamma * V_sol / (gamma_sol-1e-4);
+    gamma_sol = double(sosgetsol(progV, gamma)) - 1e-4
+    V_sol = normalized_gamma * V_sol / gamma_sol;
+    
+    if beta_sol < 0
+        beta_sol = 0;
+    end
+    
+    trace_phase2_beta = [trace_phase2_beta; beta_sol];
+    trace_phase2_gamma = [trace_phase2_gamma; gamma_sol];
+    trace_phase2_V_coeff{k} = V_sol;
     
     if abs(beta_sol - prev_beta_sol) < eps
         break
