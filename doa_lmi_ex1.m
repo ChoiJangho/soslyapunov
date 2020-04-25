@@ -2,7 +2,7 @@
 %% polynomial systems via LMI's", B. Tibken, CDC 2000
 
 clear all;
-pvar x1 x2 eta c;
+pvar x1 x2 c;
 vars = [x1; x2];
 % vector of monomials
 vars_mono2 = monomials(vars, [0, 1, 2]);
@@ -23,98 +23,83 @@ c_star = 1;
 c0 = c_star;
 
 %% Step 1: check feasibility at c_star;
-prog_feas = sosprogram(vars);
-
-% [prog, G1] = sospolymatrixvar(prog, monomials(vars, 0), [3, 3], 'symmetric');
-% [prog, G2] = sospolymatrixvar(prog, monomials(vars, 0), [3, 3], 'symmetric');
-% q1 = vars_mono1' * G1 * vars_mono1;
-% q2 = vars_mono1' * G2 * vars_mono1
-
-% Decision var 1: q1(x)
-[prog_feas, q1] = sossosvar(prog_feas, vars_mono1, 'wscoeff');
-% Decision var 2: q2(x)
-[prog_feas, q2] = sossosvar(prog_feas, vars_mono1, 'wscoeff');
-% q0(x) at c_star, determined by formula (19)
-q0 = -dV - q1*(V-c0) - q2*(c_star-V);
-prog_feas = sosineq(prog_feas, q0-eps);
-prog_feas = sosineq(prog_feas, q1-eps);
-prog_feas = sosineq(prog_feas, q2-eps);
-solver_opt.solver = 'sedumi';
-prog_feas = sossolve(prog_feas,solver_opt);
-if prog_feas.solinfo.info.pinf || prog_feas.solinfo.info.dinf
-    disp("Infeasible solution at c_star, increase monomial degree.")
-    return
-else
-    disp("Feasible solution at c_star, proceeding to c_opt problem.")
-end
-feasible_q1 = sosgetsol(prog_feas,q1);
-feasible_q2 = sosgetsol(prog_feas,q2);
+% prog_feas = sosprogram(vars);
+% 
+% % [prog, G1] = sospolymatrixvar(prog, monomials(vars, 0), [3, 3], 'symmetric');
+% % [prog, G2] = sospolymatrixvar(prog, monomials(vars, 0), [3, 3], 'symmetric');
+% % q1 = vars_mono1' * G1 * vars_mono1;
+% % q2 = vars_mono1' * G2 * vars_mono1
+% 
+% % Decision var 1: q1(x)
+% [prog_feas, q1] = sossosvar(prog_feas, vars_mono1, 'wscoeff');
+% % Decision var 2: q2(x)
+% [prog_feas, q2] = sossosvar(prog_feas, vars_mono1, 'wscoeff');
+% % q0(x) at c_star, determined by formula (19)
+% q0 = -dV - q1*(V-c0) - q2*(c_star-V);
+% prog_feas = sosineq(prog_feas, q0-eps);
+% prog_feas = sosineq(prog_feas, q1-eps);
+% prog_feas = sosineq(prog_feas, q2-eps);
+% solver_opt.solver = 'sedumi';
+% prog_feas = sossolve(prog_feas,solver_opt);
+% if prog_feas.solinfo.info.pinf || prog_feas.solinfo.info.dinf
+%     disp("Infeasible solution at c_star, increase monomial degree.")
+%     return
+% else
+%     disp("Feasible solution at c_star, proceeding to c_opt problem.")
+% end
+% feasible_q1 = sosgetsol(prog_feas,q1);
+% feasible_q2 = sosgetsol(prog_feas,q2);
 
 
 %% Step 2: solve min(eta)
-% Initialization
-prog = sosprogram(vars);
-% 
-% % Decision var 1: q0(x)
-% [prog, q0] = sossosvar(prog, vars_mono1, 'wscoeff');
-% % Decision var 2: q1(x)
-% [prog, q1] = sossosvar(prog, vars_mono1, 'wscoeff');
-% % Decision var 3: q2(x)
-% [prog, q2] = sossosvar(prog, vars_mono1, 'wscoeff');
-% 
-% % prog = sosdecvar(prog,c);
-% 
-% prog = soseq(prog, q0 + q1*(V-c0) + q2*(c-V) +dV);
-% 
-% prog = sossetobj(prog, -c);
-% 
-% solver_opt.solver = 'sedumi';
-% prog = sossolve(prog,solver_opt);
-% SOL_q1 = sosgetsol(prog,q1);
-% SOL_q2 = sosgetsol(prog,q2);
-
-%%%%%%%%%%%%
-% [prog, G1] = sospolymatrixvar(prog, monomials(vars, 0), [3, 3], 'symmetric');
-% [prog, G2] = sospolymatrixvar(prog, monomials(vars, 0), [3, 3], 'symmetric');
-% [prog, G00] = sospolymatrixvar(prog, monomials(vars, 0), [3, 3], 'symmetric');
-% [prog, G01] = sospolymatrixvar(prog, monomials(vars, 0), [3, 3], 'symmetric');
-prog = sosdecvar(prog,eta);
-% 
-% q1 = vars_mono1' * G1 * vars_mono1;
-% q2 = vars_mono1' * G2 * vars_mono1;
-% q00 = vars_mono1' * G00 * vars_mono1;
-% q01= vars_mono1' * G01 * vars_mono1;
-% 
-% prog = soseq(prog, q00 + dV + q1*(V-c0) + q2 * c_star);
-% prog = soseq(prog, q01 + q2 * (1-V));
-% % I cannot apply this inequality condition.
-% prog = sosmatrixineq(prog, eta*G00+G01 - eps*I, 'quadraticMineq');
-% prog = sosmatrixineq(prog,G00-eps*I,'quadraticMineq');
-% prog = sosmatrixineq(prog,G1-eps*I,'quadraticMineq');
-% prog = sosmatrixineq(prog,G2-eps*I,'quadraticMineq');
-
-
-%%%%%%%%%%%%%
-% Decision var 1: q1(x)
-[prog, q1] = sossosvar(prog, vars_mono1, 'wscoeff');
-% Decision var 2: q2(x)
-[prog, q2] = sossosvar(prog, vars_mono1, 'wscoeff');
-
-
-% eta*q0(x), determined by formula (19), (30)
-etaq0 = -eta * dV - eta * q1*(V-c0) - q2*(eta * c_star + 1 -V);
-q00 = -dV - q1*(V-c0) - q2 * c_star; % q11 is eta dependent terms in q0;
-q01 = -q2 * (1-V);
-prog = sosineq(prog, etaq0-eps);
-prog = sosineq(prog, q00-eps);
-prog = sosineq(prog, q1-eps);
-prog = sosineq(prog, q2-eps);
-
-
-% set objective: min eta
-prog = sossetobj(prog, eta);
-
+eta_low = 0;
+eta_high = eta_low + 100;
+feasibility = false;
+while_count = 0;
 solver_opt.solver = 'sedumi';
-prog = sossolve(prog,solver_opt);
-SOL_q1 = sosgetsol(prog,q1);
-SOL_q2 = sosgetsol(prog,q2);
+ 
+while eta_high - eta_low > eps || ~ feasibility
+    eta_var = (eta_high - eta_low) / 2 + eta_low;
+    disp("check eta:"); disp(eta_var);
+    % Initialization
+    prog = sosprogram(vars);
+    % Decision var 1: q1(x)
+    [prog, q1] = sospolyvar(prog, vars_mono2, 'wscoeff');
+    % Decision var 2: q2(x)
+    [prog, q2] = sospolyvar(prog, vars_mono2, 'wscoeff');
+    % eta*q0(x), determined by formula (19), (30)
+    q0_star = -dV - q1*(V-c0) - q2*(c_star-V);
+    q00 = -dV - q1*(V-c0) + q2 * V; % q11 is eta dependent terms in q0;
+    q01 = -q2;
+
+    prog = sosineq(prog, eta_var * q0_star + q01 -eps);
+    prog = sosineq(prog, q0_star-eps);
+    prog = sosineq(prog, q1-eps);
+    prog = sosineq(prog, q2-eps);
+    prog = sossolve(prog,solver_opt);
+    if prog.solinfo.info.pinf || prog.solinfo.info.dinf 
+        % Infeasible
+        disp("Infeasible");
+        eta_low = eta_var;
+        feasibility = false;
+    elseif prog.solinfo.info.numerr == 1 
+        disp("Numerical_error");
+        eta_low = eta_low + eps;
+        feasibility = false;
+    else
+        % Feasible
+        disp("Feasible");
+        eta_high = eta_var;
+        feasibility = true;
+    end
+    if while_count > 100
+        disp("Infeasible in phase 1 - beta");
+        return
+    end
+    while_count = while_count +1;
+    SOL_q1 = sosgetsol(prog,q1);
+    SOL_q2 = sosgetsol(prog,q2);
+
+end
+c_opt = c_star+1/eta_var;
+
